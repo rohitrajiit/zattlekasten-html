@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zettelkasten App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles */
+        body {
+            font-family: 'Inter', sans-serif; /* Use Inter font */
+        }
+        /* Style for links within notes */
+        .note-link {
+            color: #3b82f6; /* blue-500 */
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .note-link:hover {
+            color: #2563eb; /* blue-600 */
+        }
+        /* Style for backlinks */
+        .backlink-item {
+            display: block;
+            padding: 2px 0;
+        }
+        /* Basic scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cccccc;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #aaaaaa;
+        }
+        /* Ensure textareas resize properly */
+        textarea {
+            resize: vertical; /* Allow vertical resizing */
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-100 h-screen flex flex-col">
+
+    <header class="bg-white shadow-md p-4">
+        <h1 class="text-2xl font-bold text-gray-800">My Zettelkasten</h1>
+    </header>
+
+    <div class="flex-grow flex flex-col md:flex-row overflow-hidden p-4 gap-4">
+
+        <aside class="w-full md:w-1/4 bg-white rounded-lg shadow p-4 flex flex-col overflow-hidden">
+            <div class="flex justify-between items-center mb-3 border-b pb-2">
+                <h2 class="text-lg font-semibold text-gray-700">Notes</h2>
+                <button id="new-note-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded text-sm transition duration-150 ease-in-out">
+                    New Note
+                </button>
+            </div>
+            <div class="flex-grow overflow-y-auto pr-1">
+                <ul id="note-list" class="space-y-1">
+                    <li class="text-gray-500 italic">No notes yet.</li>
+                </ul>
+            </div>
+        </aside>
+
+        <main class="w-full md:w-3/4 bg-white rounded-lg shadow p-6 flex flex-col overflow-hidden">
+            <div id="editor-view" class="flex flex-col h-full">
+                <input type="text" id="note-title" placeholder="Note Title" class="w-full p-2 border rounded mb-4 text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400" disabled>
+
+                <textarea id="note-content" placeholder="Write your note here... Use [[Note Title]] to link notes." class="w-full flex-grow p-3 border rounded mb-4 focus:outline-none focus:ring-2 focus:ring-blue-400" disabled></textarea>
+
+                <div class="flex justify-end items-center space-x-3 mb-4">
+                     <span id="status-message" class="text-sm text-gray-500 mr-auto"></span>
+                     <button id="delete-note-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150 ease-in-out" disabled>
+                        Delete
+                    </button>
+                    <button id="save-note-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition duration-150 ease-in-out" disabled>
+                        Save Note
+                    </button>
+                </div>
+
+                 <div class="border-t pt-4 mb-4 overflow-y-auto max-h-48 bg-gray-50 p-3 rounded">
+                    <h3 class="text-md font-semibold text-gray-600 mb-2">Preview:</h3>
+                    <div id="note-display" class="prose prose-sm max-w-none">
+                        <p class="text-gray-500 italic">Select or create a note to view.</p>
+                    </div>
+                </div>
+
+
+                <div class="border-t pt-4 flex-shrink-0">
+                    <h3 class="text-md font-semibold text-gray-600 mb-2">Linked From (Backlinks):</h3>
+                    <div id="backlinks-list" class="text-sm space-y-1">
+                        <p class="text-gray-500 italic">No backlinks found.</p>
+                        </div>
+                </div>
+            </div>
+
+             <div id="placeholder-view" class="flex flex-col items-center justify-center h-full text-gray-500">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <p class="text-lg">Select a note from the list or create a new one.</p>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const noteList = document.getElementById('note-list');
+        const noteTitleInput = document.getElementById('note-title');
+        const noteContentInput = document.getElementById('note-content');
+        const saveNoteBtn = document.getElementById('save-note-btn');
+        const newNoteBtn = document.getElementById('new-note-btn');
+        const deleteNoteBtn = document.getElementById('delete-note-btn');
+        const noteDisplay = document.getElementById('note-display');
+        const backlinksList = document.getElementById('backlinks-list');
+        const statusMessage = document.getElementById('status-message');
+        const editorView = document.getElementById('editor-view');
+        const placeholderView = document.getElementById('placeholder-view');
+
+        // --- State ---
+        let notes = []; // Array to hold note objects { id, title, content, createdAt, updatedAt }
+        let currentNoteId = null; // ID of the note currently being edited/viewed
+
+        // --- Local Storage ---
+        const STORAGE_KEY = 'zettelkasten_notes';
+
+        function loadNotesFromStorage() {
+            try {
+                const storedNotes = localStorage.getItem(STORAGE_KEY);
+                if (storedNotes) {
+                    notes = JSON.parse(storedNotes);
+                } else {
+                    notes = [];
+                }
+            } catch (error) {
+                console.error("Error loading notes from localStorage:", error);
+                notes = []; // Reset notes if storage is corrupted or inaccessible
+                setStatus("Error loading notes.", true);
+            }
+        }
+
+        function saveNotesToStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+            } catch (error) {
+                console.error("Error saving notes to localStorage:", error);
+                setStatus("Error saving notes.", true);
+            }
+        }
+
+        // --- Rendering ---
+        function renderNoteList() {
+            noteList.innerHTML = ''; // Clear existing list
+            if (notes.length === 0) {
+                noteList.innerHTML = '<li class="text-gray-500 italic p-2">No notes yet.</li>';
+                return;
+            }
+
+            // Sort notes by title for consistent order
+            const sortedNotes = [...notes].sort((a, b) => a.title.localeCompare(b.title));
+
+            sortedNotes.forEach(note => {
+                const li = document.createElement('li');
+                li.textContent = note.title || 'Untitled Note';
+                li.dataset.id = note.id;
+                li.className = `p-2 rounded cursor-pointer hover:bg-gray-200 text-gray-800 truncate ${note.id === currentNoteId ? 'bg-blue-100 font-semibold' : 'bg-white'}`;
+                li.addEventListener('click', () => selectNote(note.id));
+                noteList.appendChild(li);
+            });
+        }
+
+        function renderNoteContent(note) {
+            if (!note) {
+                noteDisplay.innerHTML = '<p class="text-gray-500 italic">Note content not available.</p>';
+                return;
+            }
+
+            // Basic Markdown-like replacements (newlines and links)
+            let htmlContent = escapeHtml(note.content); // Escape HTML first
+
+            // Replace [[Link Title]] with actual links
+            htmlContent = htmlContent.replace(/\[\[(.*?)\]\]/g, (match, linkTitle) => {
+                const linkedNote = notes.find(n => n.title.toLowerCase() === linkTitle.trim().toLowerCase());
+                if (linkedNote) {
+                    return `<a href="#" class="note-link" data-link-id="${linkedNote.id}">${escapeHtml(linkTitle.trim())}</a>`;
+                } else {
+                    // Optional: Style broken links differently
+                    return `<span class="text-red-500 italic" title="Note not found: ${escapeHtml(linkTitle.trim())}">[[${escapeHtml(linkTitle.trim())}]]</span>`;
+                }
+            });
+
+             // Replace newlines with <br> for display
+            htmlContent = htmlContent.replace(/\n/g, '<br>');
+
+
+            noteDisplay.innerHTML = htmlContent;
+
+            // Add event listeners to the newly created links
+            noteDisplay.querySelectorAll('.note-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const linkId = e.target.dataset.linkId;
+                    if (linkId) {
+                        selectNote(linkId);
+                    }
+                });
+            });
+        }
+
+        function renderBacklinks(noteId) {
+            backlinksList.innerHTML = ''; // Clear existing list
+            const currentNote = notes.find(n => n.id === noteId);
+            if (!currentNote) {
+                 backlinksList.innerHTML = '<p class="text-gray-500 italic">Cannot find backlinks for non-existent note.</p>';
+                 return;
+            }
+
+            const backlinks = [];
+            const linkRegex = /\[\[(.*?)\]\]/g;
+
+            notes.forEach(potentialLinker => {
+                if (potentialLinker.id === noteId) return; // Don't link to self in backlinks
+
+                let match;
+                while ((match = linkRegex.exec(potentialLinker.content)) !== null) {
+                    const linkTitle = match[1].trim();
+                    if (linkTitle.toLowerCase() === currentNote.title.toLowerCase()) {
+                        backlinks.push(potentialLinker);
+                        break; // Only list each linking note once
+                    }
+                }
+            });
+
+            if (backlinks.length === 0) {
+                backlinksList.innerHTML = '<p class="text-gray-500 italic">No backlinks found.</p>';
+            } else {
+                 backlinks.sort((a, b) => a.title.localeCompare(b.title)).forEach(linker => {
+                    const link = document.createElement('a');
+                    link.href = '#';
+                    link.textContent = linker.title || 'Untitled Note';
+                    link.dataset.linkId = linker.id;
+                    link.className = 'note-link backlink-item hover:bg-gray-100 p-1 rounded';
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        selectNote(linker.id);
+                    });
+                    backlinksList.appendChild(link);
+                });
+            }
+        }
+
+
+        // --- Note Management ---
+        function selectNote(id) {
+            if (currentNoteId === id) return; // Do nothing if already selected
+
+            // Check for unsaved changes before switching
+             const currentNote = notes.find(n => n.id === currentNoteId);
+             if (currentNote) {
+                 const isDirty = noteTitleInput.value !== currentNote.title || noteContentInput.value !== currentNote.content;
+                 if (isDirty) {
+                     if (!confirm("You have unsaved changes. Are you sure you want to discard them and switch notes?")) {
+                         return; // Cancel switching
+                     }
+                 }
+             }
+
+
+            currentNoteId = id;
+            const note = notes.find(n => n.id === id);
+
+            if (note) {
+                showEditorView(); // Make sure editor is visible
+                noteTitleInput.value = note.title;
+                noteContentInput.value = note.content;
+                noteTitleInput.disabled = false;
+                noteContentInput.disabled = false;
+                saveNoteBtn.disabled = false;
+                deleteNoteBtn.disabled = false;
+                renderNoteContent(note); // Update preview
+                renderBacklinks(note.id); // Update backlinks
+                setStatus(`Loaded note: ${note.title}`);
+            } else {
+                 // This case might happen if a link points to a deleted note
+                console.warn(`Note with ID ${id} not found.`);
+                clearEditor(); // Clear the editor if note not found
+                setStatus(`Could not find note with ID ${id}.`, true);
+            }
+
+            renderNoteList(); // Re-render list to highlight selection
+        }
+
+        function createNewNote() {
+            // Check for unsaved changes
+            if (currentNoteId) {
+                 const currentNote = notes.find(n => n.id === currentNoteId);
+                 if (currentNote) {
+                     const isDirty = noteTitleInput.value !== currentNote.title || noteContentInput.value !== currentNote.content;
+                     if (isDirty) {
+                         if (!confirm("You have unsaved changes. Are you sure you want to discard them and create a new note?")) {
+                             return; // Cancel creation
+                         }
+                     }
+                 }
+            }
+
+            showEditorView();
+            const newNote = {
+                id: `note_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // More robust unique ID
+                title: "", // Start with empty title
+                content: "",
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            notes.push(newNote);
+            currentNoteId = newNote.id;
+
+            clearEditor(false); // Clear fields but keep enabled
+            noteTitleInput.focus(); // Focus title for quick entry
+            renderNoteList(); // Update list
+            renderNoteContent(newNote); // Render empty content
+            renderBacklinks(newNote.id); // Render empty backlinks
+            setStatus("New note created. Enter title and content.");
+             // Don't save immediately, let user fill it first
+        }
+
+        function saveCurrentNote() {
+            if (!currentNoteId) {
+                setStatus("No note selected to save.", true);
+                return;
+            }
+
+            const noteIndex = notes.findIndex(n => n.id === currentNoteId);
+            if (noteIndex === -1) {
+                 setStatus("Error: Could not find the current note to save.", true);
+                 return;
+            }
+
+            const title = noteTitleInput.value.trim();
+            const content = noteContentInput.value; // Keep leading/trailing whitespace in content
+
+            // Basic validation: Check if title is empty
+            if (!title) {
+                 setStatus("Note title cannot be empty.", true);
+                 alert("Please enter a title for the note.");
+                 noteTitleInput.focus();
+                 return;
+            }
+
+            // Check for duplicate titles (optional, but good practice)
+            const duplicate = notes.find(n => n.title.toLowerCase() === title.toLowerCase() && n.id !== currentNoteId);
+            if (duplicate) {
+                 if (!confirm(`A note with the title "${title}" already exists. Do you want to save anyway?`)) {
+                     return; // Cancel save
+                 }
+            }
+
+
+            const updatedNote = {
+                ...notes[noteIndex],
+                title: title,
+                content: content,
+                updatedAt: new Date().toISOString()
+            };
+
+            notes[noteIndex] = updatedNote;
+            saveNotesToStorage();
+            renderNoteList(); // Update list in case title changed
+            renderNoteContent(updatedNote); // Re-render content for link updates
+            renderBacklinks(updatedNote.id); // Re-render backlinks
+            // Important: Re-render backlinks for OTHER notes if the title changed
+            // This is complex, for now, we only update current note's view.
+            // A full update would require iterating through all notes.
+
+            setStatus(`Note "${title}" saved successfully.`, false, 2000); // Show success for 2s
+        }
+
+        function deleteCurrentNote() {
+            if (!currentNoteId) {
+                setStatus("No note selected to delete.", true);
+                return;
+            }
+
+            const noteIndex = notes.findIndex(n => n.id === currentNoteId);
+            if (noteIndex === -1) {
+                 setStatus("Error: Could not find the current note to delete.", true);
+                 return;
+            }
+
+            const noteTitle = notes[noteIndex].title || "Untitled Note";
+            if (confirm(`Are you sure you want to delete the note "${noteTitle}"? This cannot be undone.`)) {
+                notes.splice(noteIndex, 1); // Remove note from array
+                saveNotesToStorage();
+                currentNoteId = null; // Deselect
+                clearEditor();
+                showPlaceholderView(); // Show placeholder after delete
+                renderNoteList(); // Update list
+                setStatus(`Note "${noteTitle}" deleted.`);
+            }
+        }
+
+        function clearEditor(disable = true) {
+            noteTitleInput.value = '';
+            noteContentInput.value = '';
+            noteDisplay.innerHTML = '<p class="text-gray-500 italic">Select or create a note to view.</p>';
+            backlinksList.innerHTML = '<p class="text-gray-500 italic">No backlinks found.</p>';
+            noteTitleInput.disabled = disable;
+            noteContentInput.disabled = disable;
+            saveNoteBtn.disabled = disable;
+            deleteNoteBtn.disabled = disable;
+             if (disable) {
+                currentNoteId = null; // Ensure no note is considered active
+             }
+        }
+
+         function showEditorView() {
+            editorView.classList.remove('hidden');
+            placeholderView.classList.add('hidden');
+        }
+
+        function showPlaceholderView() {
+            editorView.classList.add('hidden');
+            placeholderView.classList.remove('hidden');
+            clearEditor(); // Also clear and disable editor fields
+        }
+
+
+        // --- Utility Functions ---
+        function setStatus(message, isError = false, duration = null) {
+            statusMessage.textContent = message;
+            statusMessage.className = `text-sm mr-auto ${isError ? 'text-red-600' : 'text-green-600'}`;
+
+            // Clear message after duration if specified
+            if (duration) {
+                setTimeout(() => {
+                    if (statusMessage.textContent === message) { // Only clear if message hasn't changed
+                       statusMessage.textContent = '';
+                    }
+                }, duration);
+            }
+        }
+
+        function escapeHtml(unsafe) {
+            if (unsafe === null || unsafe === undefined) return '';
+            return unsafe
+                 .toString()
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        }
+
+
+        // --- Event Listeners ---
+        newNoteBtn.addEventListener('click', createNewNote);
+        saveNoteBtn.addEventListener('click', saveCurrentNote);
+        deleteNoteBtn.addEventListener('click', deleteCurrentNote);
+
+        // Auto-save draft or indicate unsaved changes (simple version: just enable save button)
+        noteTitleInput.addEventListener('input', () => {
+             if (currentNoteId) saveNoteBtn.disabled = false; // Enable save on edit
+             // More complex: compare with original note data for dirty flag
+        });
+        noteContentInput.addEventListener('input', () => {
+             if (currentNoteId) {
+                saveNoteBtn.disabled = false; // Enable save on edit
+                // Live preview update (can be slow for large notes)
+                 const tempNote = { title: noteTitleInput.value, content: noteContentInput.value };
+                 renderNoteContent(tempNote);
+             }
+        });
+
+
+        // --- Initialization ---
+        function initializeApp() {
+            loadNotesFromStorage();
+            renderNoteList();
+            if (notes.length > 0) {
+               showPlaceholderView(); // Start with placeholder
+            } else {
+               showPlaceholderView(); // Also show placeholder if no notes exist
+            }
+            setStatus("App loaded.");
+        }
+
+        // Wait for DOM to be fully loaded before initializing
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+    </script>
+
+</body>
+</html>
